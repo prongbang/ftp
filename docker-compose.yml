@@ -1,0 +1,10 @@
+version: "3.5"
+services:
+  sftpserver:
+    image: drakkan/sftpgo:2.4.x-alpine
+    ports:
+      - "8080:8080"
+      - "2022:2022"
+    volumes:
+      - "./volumes/sftpgo:/srv/sftpgo/data"
+      - "./volumes:/etc/sftpgo"

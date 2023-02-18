@@ -1,7 +1,14 @@
 package main
 
-import "github.com/prongbang/ftp/goftp"
+import (
+	"github.com/prongbang/ftp/goftp"
+	"github.com/prongbang/ftp/gosftp"
+)
 
 func main() {
-	goftp.Run()
+	if false {
+		goftp.Run()
+	} else {
+		gosftp.Run()
+	}
 }

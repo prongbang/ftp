@@ -2,56 +2,31 @@ package gosftp
 
 import (
 	"fmt"
-	"io"
-	"log"
-	"os"
-
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
+	"time"
 )
 
 func Run() {
-	// Connect to the remote server
-	config := &ssh.ClientConfig{
-		User: "username",
-		Auth: []ssh.AuthMethod{
-			ssh.Password("password"),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
 
-	conn, err := ssh.Dial("tcp", "sftp.example.com:22", config)
+	fmt.Println("Sftp Upload started ", time.Now().String())
+
+	config := &Config{
+		Host:          "127.0.0.1",
+		User:          "atv",
+		Password:      "Atv@123!",
+		Port:          2022,
+		SSHTurstedKey: "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBDyb0S57jLYhQv/qoOoYrK5XBVpEflCVxyboNOaVWFzLu1q6juqBHkdDp6QFvq0ad9x3Kx8qilrl9IhQoktl4fw=",
+	}
+	ftpClient, err := New(config)
 	if err != nil {
-		log.Fatal("Failed to dial: ", err)
+		fmt.Println(err)
+		return
 	}
-	defer conn.Close()
-
-	// Create an SFTP client
-	client, err := sftp.NewClient(conn)
+	err = ftpClient.PutFile("files/test.csv", "localfolder/test.csv")
+	err = ftpClient.PutMessage("1,hello,message", "csv/test.csv")
 	if err != nil {
-		log.Fatal("Failed to create client: ", err)
-	}
-	defer client.Close()
-
-	// Open the remote file
-	remoteFile, err := client.Open("/path/to/remote/file.txt")
-	if err != nil {
-		log.Fatal("Failed to open remote file: ", err)
-	}
-	defer remoteFile.Close()
-
-	// Create the local file
-	localFile, err := os.Create("/path/to/local/file.txt")
-	if err != nil {
-		log.Fatal("Failed to create local file: ", err)
-	}
-	defer localFile.Close()
-
-	// Download the file
-	_, err = io.Copy(localFile, remoteFile)
-	if err != nil {
-		log.Fatal("Failed to download file: ", err)
+		fmt.Println(err)
+	} else {
+		fmt.Println("Sftp Upload finished ", time.Now().String())
 	}
 
-	fmt.Println("File downloaded successfully.")
 }
