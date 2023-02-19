@@ -2,7 +2,6 @@ package gosftp
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,33 +19,32 @@ type Config struct {
 	Host, User, Password string
 	Port                 int
 	*sftp.Client
-	SSHTurstedKey string
+	SSHTrustedKey string
 }
 
-// Create a new SFTP connection by given parameters
-func New(c *Config) (client *Config, err error) {
-	switch {
-	case `` == strings.TrimSpace(c.Host),
-		`` == strings.TrimSpace(c.User),
-		`` == strings.TrimSpace(c.Password),
-		0 >= c.Port || c.Port > 65535:
-		return nil, errors.New("Invalid parameters")
-	}
-
-	if err = c.connect(); nil != err {
-		return nil, err
-	}
-	return c, nil
+type SftpClient interface {
+	PutFile(localFile, remoteFile string) (err error)
+	PutString(text, remoteFile string) (err error)
 }
 
-// Upload file to sftp server
-func (sc *Config) PutFile(localFile, remoteFile string) (err error) {
+type sftpClient struct {
+	*sftp.Client
+}
+
+// New Create a new SFTP connection by given parameters
+func New(c *Config) (SftpClient, error) {
+	client, err := c.connect()
+	return &sftpClient{Client: client}, err
+}
+
+// PutFile Upload file to sftp server
+func (sc *sftpClient) PutFile(localFile, remoteFile string) (err error) {
 	srcFile, err := os.Open(localFile)
 	if err != nil {
 		fmt.Println("Open file", err)
 		return err
 	}
-	defer srcFile.Close()
+	defer func(srcFile *os.File) { _ = srcFile.Close() }(srcFile)
 
 	// Make remote directories recursion
 	parent := filepath.Dir(remoteFile)
@@ -62,14 +60,14 @@ func (sc *Config) PutFile(localFile, remoteFile string) (err error) {
 		fmt.Println("Create remote file", err)
 		return err
 	}
-	defer dstFile.Close()
+	defer func(dstFile *sftp.File) { _ = dstFile.Close() }(dstFile)
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err
 }
 
-// Upload message to sftp server
-func (sc *Config) PutMessage(message, remoteFile string) (err error) {
+// PutString Upload message to sftp server
+func (sc *sftpClient) PutString(text, remoteFile string) (err error) {
 	// Make remote directories recursion
 	parent := filepath.Dir(remoteFile)
 	path := string(filepath.Separator)
@@ -84,45 +82,44 @@ func (sc *Config) PutMessage(message, remoteFile string) (err error) {
 	if err != nil {
 		fmt.Println("Open a file on the remote:", err)
 	}
-	defer dstFile.Close()
+	defer func(dstFile *sftp.File) { _ = dstFile.Close() }(dstFile)
 
-	// Write the string message to the remote file
-	_, err = io.Copy(dstFile, strings.NewReader(message))
+	// Write the string text to the remote file
+	_, err = io.Copy(dstFile, strings.NewReader(text))
 	if err != nil {
-		fmt.Println("Copy a message to remote:", err)
+		fmt.Println("Copy a text to remote:", err)
 	}
 	return nil
 }
 
-func (sc *Config) connect() (err error) {
+func (sc *Config) connect() (client *sftp.Client, err error) {
 	config := &ssh.ClientConfig{
 		User:    sc.User,
 		Auth:    []ssh.AuthMethod{ssh.Password(sc.Password)},
 		Timeout: 30 * time.Second,
 	}
-	if sc.SSHTurstedKey != "" {
-		config.HostKeyCallback = trustedHostKeyCallback(sc.SSHTurstedKey)
+	if sc.SSHTrustedKey != "" {
+		config.HostKeyCallback = trustedHostKeyCallback(sc.SSHTrustedKey)
 	} else {
 		config.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 	}
 
-	// Connet to ssh
+	// Connect to ssh
 	addr := fmt.Sprintf("%s:%d", sc.Host, sc.Port)
 	conn, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
 		fmt.Print("Connect fail:", err)
-		return err
+		return nil, err
 	}
 
 	// Create sftp client
-	client, err := sftp.NewClient(conn, sftp.UseFstat(true), sftp.MaxPacket(20480))
+	client, err = sftp.NewClient(conn)
 	if err != nil {
 		fmt.Print("New client fail:", err)
-		return err
+		return nil, err
 	}
-	sc.Client = client
 
-	return nil
+	return client, nil
 }
 
 // SSH Key-strings
